@@ -1,0 +1,85 @@
+#!/bin/sh
+
+set -e
+
+help() {
+  echo "Usage: $0 [-C <path>] <command> [args]"
+  echo "Options:"
+  echo "  -C <path> - specify current working directory"
+  echo "Help available for each subcommand"
+  exit 0
+}
+
+if [ $# -lt 2 ]; then
+  help
+fi
+
+while getopts ":hC:" opt; do
+  case $opt in
+    h)
+      help
+      ;;
+    C)
+      cd "$OPTARG"
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG"
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+################################################################################
+# set FT_WORKSPACE_PATH if subcommand is not init
+################################################################################
+
+init() {
+  shift
+  if [ $# -gt 0 ]; then
+    echo "Unknown parameters: $*"
+    exit 1
+  fi
+  if [ "$(echo *)" != "*" ]; then
+    echo "Current working directory is not empty."
+    exit 1
+  fi
+  touch .workspace.ft
+  exit 0
+}
+
+case "$1" in
+  "init")
+    init "$@"
+    ;;
+esac
+
+FT_WORKSPACE_PATH=$(pwd)
+while [ "$FT_WORKSPACE_PATH" != "/" ] && [ ! -f ".workspace.ft" ]
+do
+  FT_WORKSPACE_PATH=$(cd "$FT_WORKSPACE_PATH" && cd .. && pwd)
+done
+if [ ! -f "$FT_WORKSPACE_PATH/.workspace.ft" ]; then
+  echo "Current working directory is not in a mps4c workspace. (help: $0 -h)"
+  exit 1
+fi
+export FT_WORKSPACE_PATH
+
+################################################################################
+
+build() {
+  mkdir -p "$FT_WORKSPACE_PATH/tmp/POSIX"
+  shift
+}
+
+################################################################################
+
+case "$1" in
+  "build")
+    build "$@"
+    ;;
+  *)
+    echo "Unknown subcommand: $1 (help: $0 -h)"
+    exit 1
+    ;;
+esac
