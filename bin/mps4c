@@ -2,22 +2,39 @@
 
 set -e
 
-help() {
-  echo "Usage: $0 [-C <path>] <command> [args]"
+PROGRAM_NAME="$(basename "$0")"
+
+help_and_exit() {
+  echo "Usage:"
+  echo "  $PROGRAM_NAME -h"
+  echo "  $PROGRAM_NAME [-s] [-v] [-C <path>] <subcommand> [args]"
   echo "Options:"
+  echo "  -s - be more silent (mutually exclusive with -v)"
+  echo "  -v - be more verbose (mutually exclusive with -s)"
   echo "  -C <path> - specify current working directory"
-  echo "Help available for each subcommand"
-  exit 0
+  echo "Subcommands:"
+  echo "  help - this"
+  echo "  clean - clean temporary files"
+  echo "  fclean - clean + remove output files"
+  echo "  build - build"
+  echo "Help available for each subcommand via $PROGRAM_NAME <subcommand> -h"
+  exit
 }
 
-if [ $# -lt 2 ]; then
-  help
+if [ $# -eq 0 ]; then
+  help_and_exit
 fi
 
-while getopts ":hC:" opt; do
+while getopts ":hsvC:" opt; do
   case $opt in
     h)
-      help
+      help_and_exit
+      ;;
+    s)
+      FT_SILENT=1
+      ;;
+    v)
+      FT_VERBOSE=1
       ;;
     C)
       cd "$OPTARG"
@@ -30,13 +47,17 @@ while getopts ":hC:" opt; do
 done
 shift $((OPTIND - 1))
 
+if [ "$FT_SILENT" = 1 ] && [ "$FT_VERBOSE" = 1 ]; then
+  echo "Invalid option: -v and -s are mutually exclusive, but both were given."
+  exit 1
+fi
+
 ################################################################################
-# set FT_WORKSPACE_PATH if subcommand is not init
+# set FT_WORKSPACE_PATH if subcommand is not init/help
 ################################################################################
 
 init() {
-  shift
-  if [ $# -gt 0 ]; then
+  if [ $# -ne 0 ]; then
     echo "Unknown parameters: $*"
     exit 1
   fi
@@ -45,12 +66,16 @@ init() {
     exit 1
   fi
   touch .workspace.ft
-  exit 0
 }
 
 case "$1" in
   "init")
+    shift
     init "$@"
+    exit
+    ;;
+  "help")
+    help_and_exit
     ;;
 esac
 
@@ -60,26 +85,106 @@ do
   FT_WORKSPACE_PATH=$(cd "$FT_WORKSPACE_PATH" && cd .. && pwd)
 done
 if [ ! -f "$FT_WORKSPACE_PATH/.workspace.ft" ]; then
-  echo "Current working directory is not in a mps4c workspace. (help: $0 -h)"
+  echo "Current working directory is not in a mps4c workspace. (help: $PROGRAM_NAME -h)"
   exit 1
 fi
 export FT_WORKSPACE_PATH
 
 ################################################################################
+# setup cache directory if subcommand is not clean/fclean
+################################################################################
+
+FT_TMP_BASE_PATH="$FT_WORKSPACE_PATH/tmp/POSIX-shell"
+
+clean() {
+  while getopts ":h" opt; do
+    case $opt in
+      h)
+        echo "Usage:"
+        echo "  $PROGRAM_NAME clean -h"
+        echo "  $PROGRAM_NAME clean - clean all"
+        echo "  $PROGRAM_NAME clean [args...] - clean temporary and given args only"
+        exit
+        ;;
+      \?)
+        echo "Invalid option: -$OPTARG"
+        exit 1
+        ;;
+    esac
+  done
+  shift $((OPTIND - 1))
+
+  rm -rf "$FT_TMP_BASE_PATH/tmp"
+
+  for arg in "$@"; do
+    echo "Cleaning $arg..."
+    # TODO: clean
+  done
+}
+
+fclean() {
+  while getopts ":h" opt; do
+    case $opt in
+      h)
+        echo "Usage:"
+        echo "  $PROGRAM_NAME fclean -h"
+        echo "  $PROGRAM_NAME fclean - clean + remove output files"
+        exit
+        ;;
+      \?)
+        echo "Invalid option: -$OPTARG"
+        exit 1
+        ;;
+    esac
+  done
+  shift $((OPTIND - 1))
+
+  if [ $# -ne 0 ]; then
+    echo "Unknown parameters: $*"
+    exit 1
+  fi
+
+  clean
+}
+
+case "$1" in
+  "clean")
+    shift
+    clean "$@"
+    exit
+    ;;
+  "fclean")
+    shift
+    fclean "$@"
+    exit
+    ;;
+esac
+
+FT_TMP_PATH="$FT_TMP_BASE_PATH/tmp/$$.tmp"
+
+cleanup() {
+  rm -rf "$FT_TMP_PATH"
+}
+trap cleanup EXIT INT TERM QUIT
+
+mkdir -p "$FT_TMP_PATH"
+
+################################################################################
 
 build() {
-  mkdir -p "$FT_WORKSPACE_PATH/tmp/POSIX"
-  shift
+  echo "# TODO: WIP\\ $*"
 }
 
 ################################################################################
 
 case "$1" in
   "build")
+    shift
     build "$@"
+    exit
     ;;
   *)
-    echo "Unknown subcommand: $1 (help: $0 -h)"
+    echo "Unknown subcommand: $1 (help: $PROGRAM_NAME -h)"
     exit 1
     ;;
 esac
