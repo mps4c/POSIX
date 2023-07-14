@@ -6,7 +6,7 @@ PROGRAM_NAME="$(basename "$0")"
 
 help_and_exit() {
   echo "Usage:"
-  echo "  $PROGRAM_NAME -h"
+  echo "  $PROGRAM_NAME -h - this"
   echo "  $PROGRAM_NAME [-s] [-v] [-C <path>] <subcommand> [args]"
   echo "Options:"
   echo "  -s - be more silent (mutually exclusive with -v)"
@@ -57,11 +57,28 @@ fi
 ################################################################################
 
 init() {
-  if [ $# -ne 0 ]; then
-    echo "Unknown parameters: $*"
-    exit 1
-  fi
-  if [ "$(echo *)" != "*" ]; then
+  while getopts ":hf" opt; do
+    case $opt in
+      h)
+        echo "Usage:"
+        echo "  $PROGRAM_NAME init -h - this"
+        echo "  $PROGRAM_NAME init [-f] - initialize mps4c workspace in current working directory"
+        echo "Options:"
+        echo "  -f - force initialization even if current working directory is not empty"
+        exit
+        ;;
+      f)
+        FT_FORCE=1
+        ;;
+      \?)
+        echo "Invalid option: -$OPTARG"
+        exit 1
+        ;;
+    esac
+  done
+  shift $((OPTIND - 1))
+
+  if [ "$FT_FORCE" != 1 ] && [ "$(find .)" != "." ]; then
     echo "Current working directory is not empty."
     exit 1
   fi
@@ -80,15 +97,35 @@ case "$1" in
 esac
 
 FT_WORKSPACE_PATH=$(pwd)
-while [ "$FT_WORKSPACE_PATH" != "/" ] && [ ! -f ".workspace.ft" ]
+FT_RELATIVE_WORKSPACE_PATH=""
+FT_RELATIVE_CURRENT_PATH=""
+while [ "$FT_WORKSPACE_PATH" != "/" ] && [ ! -f "$FT_WORKSPACE_PATH/.workspace.ft" ]
 do
-  FT_WORKSPACE_PATH=$(cd "$FT_WORKSPACE_PATH" && cd .. && pwd)
+  if [ -z "$FT_RELATIVE_CURRENT_PATH" ]; then
+    FT_RELATIVE_CURRENT_PATH=$(basename "$FT_WORKSPACE_PATH")
+  else
+    FT_RELATIVE_CURRENT_PATH="$(basename "$FT_WORKSPACE_PATH")/$FT_RELATIVE_CURRENT_PATH"
+  fi
+  FT_WORKSPACE_PATH=$(dirname "$FT_WORKSPACE_PATH")
+  if [ -z "$FT_RELATIVE_WORKSPACE_PATH" ]; then
+    FT_RELATIVE_WORKSPACE_PATH=".."
+  else
+    FT_RELATIVE_WORKSPACE_PATH="$FT_RELATIVE_WORKSPACE_PATH/.."
+  fi
 done
 if [ ! -f "$FT_WORKSPACE_PATH/.workspace.ft" ]; then
   echo "Current working directory is not in a mps4c workspace. (help: $PROGRAM_NAME -h)"
   exit 1
 fi
+if [ -z "$FT_RELATIVE_CURRENT_PATH" ]; then
+  FT_RELATIVE_CURRENT_PATH="."
+  FT_RELATIVE_WORKSPACE_PATH="."
+else
+  FT_RELATIVE_CURRENT_PATH="./$FT_RELATIVE_CURRENT_PATH"
+fi
 export FT_WORKSPACE_PATH
+export FT_RELATIVE_WORKSPACE_PATH
+export FT_RELATIVE_CURRENT_PATH
 
 ################################################################################
 # setup cache directory if subcommand is not clean/fclean
@@ -101,7 +138,7 @@ clean() {
     case $opt in
       h)
         echo "Usage:"
-        echo "  $PROGRAM_NAME clean -h"
+        echo "  $PROGRAM_NAME clean -h - this"
         echo "  $PROGRAM_NAME clean - clean all"
         echo "  $PROGRAM_NAME clean [args...] - clean temporary and given args only"
         exit
@@ -127,7 +164,7 @@ fclean() {
     case $opt in
       h)
         echo "Usage:"
-        echo "  $PROGRAM_NAME fclean -h"
+        echo "  $PROGRAM_NAME fclean -h - this"
         echo "  $PROGRAM_NAME fclean - clean + remove output files"
         exit
         ;;
@@ -171,16 +208,16 @@ mkdir -p "$FT_TMP_PATH"
 
 ################################################################################
 
-build() {
-  echo "# TODO: WIP\\ $*"
+include_directories() {
+  printf "%s" "-I $FT_TMP_BASE_PATH/include"
 }
 
 ################################################################################
 
 case "$1" in
-  "build")
+  "include_directories")
     shift
-    build "$@"
+    include_directories "$@"
     exit
     ;;
   *)
